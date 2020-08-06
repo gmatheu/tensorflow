@@ -1,0 +1,53 @@
+name: Build
+
+on:
+  push:
+    branches:
+      - "*_actions"
+
+# https://www.tensorflow.org/install/source#docker_linux_builds
+jobs:
+  build_wheels:
+    name: Build wheels on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-18.04]
+    steps:
+    - uses: actions/checkout@v2
+    - uses: actions/setup-python@v2
+      name: Install Python
+      with:
+        python-version: '3.7'      
+    - name: Setup Bazel
+      uses: abhinavsingh/setup-bazel@v3
+    - name: Build
+#       https://software.intel.com/content/www/us/en/develop/articles/intel-optimization-for-tensorflow-installation-guide.html#pip_wheels
+      run: bazel build -c opt --copt=-mavx --copt=-mavx2 --copt=-mfma  //tensorflow/tools/pip_package:build_pip_package
+    - name: Create package
+      run: ./bazel-bin/tensorflow/tools/pip_package/build_pip_package /mnt
+    - uses: actions/upload-artifact@v2
+      with:
+        name: wheels_${{ matrix.os }}
+        path: ./mnt/*.whl
+
+  release:
+    name: Release
+    runs-on: ubuntu-18.04
+    needs: [build_wheels]
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v2
+      - name: Display structure of downloaded files
+        run: ls -R
+        working-directory: .
+      - name: Inject slug/short variables
+        uses: rlespinasse/github-slug-action@2.0.0
+      - uses: marvinpinto/action-automatic-releases@v1.0.0
+        with:
+          repo_token: "${{ secrets.GITHUB_TOKEN }}"
+          automatic_release_tag: "${{ env.GITHUB_REF_SLUG }}"
+          prerelease: true
+          title: "Development Build: ${{ env.GITHUB_REF_SLUG }}"
+          files: |
+            ./wheels_*/*.whl
