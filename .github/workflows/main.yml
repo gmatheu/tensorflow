@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - "*_actions"
+  workflow_dispatch: 
 
 # https://www.tensorflow.org/install/source#docker_linux_builds
 jobs:
