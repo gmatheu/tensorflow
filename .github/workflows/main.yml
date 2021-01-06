@@ -1,0 +1,40 @@
+name: Build
+
+on:
+  push:
+    branches:
+      - "v2.2.1_actions"
+  workflow_dispatch:
+
+jobs:
+  build_wheels:
+    name: Build wheels on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [macos-latest]
+    steps:
+    - uses: actions/checkout@v2
+    - uses: actions/setup-python@v2
+      name: Install Python
+      with:
+        python-version: '3.8'
+
+    - name: Install cibuildwheel
+      run: |
+        python -m pip install -U numpy pip six wheel setuptools mock 'future>=0.17.1'
+        python -m pip install keras_applications keras_preprocessing --no-deps
+    - name: Setup Bazel
+      uses: abhinavsingh/setup-bazel@v3
+      with:
+        version: 3.1.0
+    - name: Build
+#       https://software.intel.com/content/www/us/en/develop/articles/intel-optimization-for-tensorflow-installation-guide.html#pip_wheels
+      run: bazel build -c opt --copt=-mno-avx //tensorflow/tools/pip_package:build_pip_package
+    - name: Create package
+      run: ./bazel-bin/tensorflow/tools/pip_package/build_pip_package /mnt
+    - uses: actions/upload-artifact@v2
+      with:
+        name: wheels_${{ matrix.os }}
+        path: ./mnt/*.whl
+
